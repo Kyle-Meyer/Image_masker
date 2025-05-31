@@ -6,126 +6,162 @@ import numpy as np
 import sys
 import os
 
-# If you copied common.py to your project folder
-from common import Sketcher
-
-# Alternative: If you copied just the Sketcher class into your file
-# (then you don't need the above import)
-
-# Global variable declarations
-Isrc = None          # Original color image
-mask = None          # Binary mask for drawing
-Ioutput = None       # Final output image
-display_image = None # Working copy for display
+# Import our custom sketcher class
+from sketcher import sketcher
 
 class ImageMasker:
     """
-    a class to handle selective image masking
+    A class to handle selective color masking on images.
+    Allows user to draw masks and display grayscale image with colored masked regions.
     """
     
     def __init__(self, image_path):
+        """
+        Initialize the ImageMasker with an image file.
+        
+        Args:
+            image_path (str): Path to the source image file
+        """
+        # Instance variables
         self.image_path = image_path
-        self.Isrc = None # original color of the image
-        self.mask = None
-        self.Ioutput = None 
-        self.disply_image = None 
-        self.sketcher = None 
-
-        self.ESC_KEY = 27 
+        self.Isrc = None          # Original color image
+        self.mask = None          # Binary mask for drawing
+        self.Ioutput = None       # Final output image
+        self.display_image = None # Working copy for display
+        self.sketcher = None      # sketcher instance
+        
+        # Constants
+        self.ESC_KEY = 27
         self.ENTER_KEY = 13
-
-        self.load_image()
-        self.initialize_mask()
-        self.setup_sketcher()
-
-    def load_image(self):
-        #attempt to load in the image with the path given
-        self.Isrc = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
-
-        if self.Isrc is None:
-            raise ValueError("Error, could not load image from path ", self.image_path)
-
-        print("loaded image: ", self.image_path)
-        print("Image dims: ", self.Isrc.shape)
+        
+        # Load and initialize the image
+        self._load_image()
+        self._initialize_mask()
+        self._setup_sketcher()
     
-    def initialize_mask(self):
+    def _load_image(self):
+        """Load the source image from file path."""
+        self.Isrc = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
+        
+        if self.Isrc is None:
+            raise ValueError(f"Error: Could not load image from {self.image_path}")
+        
+        print(f"Loaded image: {self.image_path}")
+        print(f"Image dimensions: {self.Isrc.shape}")
+    
+    def _initialize_mask(self):
+        """Initialize the binary mask and display image."""
+        # Get image dimensions
         height, width = self.Isrc.shape[:2]
-
+        
+        # Initialize mask (all zeros/black)
         self.mask = np.zeros((height, width), dtype=np.uint8)
-
+        
+        # Create a copy of source image for display
         self.display_image = self.Isrc.copy()
-
-    def setup_sketcher(self):
-        self.sketcher = Sketcher('Image Window', self.display_image, self.mask)
-
-    #as the function is named, make the mask with two copies of the image 
-    #one is gray scale to let us know what isnt masked 
-    #the other is color so we know what is in the mask 
+    
+    def _setup_sketcher(self):
+        """Initialize the sketcher class for interactive drawing."""
+        self.sketcher = sketcher('Image Window', self.display_image, self.mask)
+    
     def process_mask_and_display(self):
-        #convert source image to gray scale
-        gray = cv2.cvtColor(self.Isrc, cv2.COLOR_BGR2GRAY)
-
-        #convert gray scale back to 3 channel color for blending
-        gray_3channel = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-
-        #create an inverse mask using bitwise_not
+        """
+        Process the current mask and display result with selective coloring.
+        Masked areas remain in color, unmasked areas become grayscale.
+        """
+        # Convert source image to grayscale
+        Igray = cv2.cvtColor(self.Isrc, cv2.COLOR_BGR2GRAY)
+        
+        # Convert grayscale back to 3-channel for blending
+        Igray_3channel = cv2.cvtColor(Igray, cv2.COLOR_GRAY2BGR)
+        
+        # Create inverse mask
         inverse_mask = cv2.bitwise_not(self.mask)
-
-        #apply masks using bitwise operations (AND)
-        #masked area from original color image
-        color_region = cv2.bitwise_and(self.Isrc, self.Isrc, maske = self.mask) 
-
-        #unmasked area from grayscale image to let us know whats not being selected 
-        gray_region = cv2.bitwise_and(gray_3channel, gray_3channel, mask = inverse_mask)
-
-        #now we combine both regions to make the final image 
+        
+        # Apply masks using bitwise operations
+        # Masked area from original color image
+        color_region = cv2.bitwise_and(self.Isrc, self.Isrc, mask=self.mask)
+        
+        # Unmasked area from grayscale image
+        gray_region = cv2.bitwise_and(Igray_3channel, Igray_3channel, mask=inverse_mask)
+        
+        # Combine both regions
         self.Ioutput = cv2.bitwise_or(color_region, gray_region)
-
-        #display result
+        
+        # Display result
         cv2.namedWindow('Output')
         cv2.imshow('Output', self.Ioutput)
-
-    #utility function to clear the mask and display the image 
+    
     def clear_mask(self):
-        self.mask.fill(0)
-
+        """Clear the current mask and reset the display image."""
+        # Reset display image to original
         self.display_image = self.Isrc.copy()
-        self.sketcher.img = self.display_image
-
-        print("mask cleared")
-
+        
+        # Clear the sketcher's drawing
+        self.sketcher.clear_drawing()
+        
+        # Update sketcher with fresh images
+        self.sketcher.update_images(self.display_image, self.mask)
+        
+        print("Mask cleared")
+    
     def save_output(self, output_path):
+        """
+        Save the current output image to file.
+        
+        Args:
+            output_path (str): Path where to save the output image
+        """
         if self.Ioutput is not None:
             cv2.imwrite(output_path, self.Ioutput)
+            print(f"Output saved to: {output_path}")
         else:
-            print("output path is None, cannot save")
-
-    #nice utility to get some stats for print outs
+            print("No output image to save. Press 'r' first to process the mask.")
+    
+    def change_brush_size(self, delta):
+        """
+        Change the brush size by the given delta.
+        
+        Args:
+            delta (int): Amount to change brush size (+/-)
+        """
+        current_size = self.sketcher.get_brush_size()
+        new_size = current_size + delta
+        self.sketcher.set_brush_size(new_size)
+        print(f"Brush size: {self.sketcher.get_brush_size()}")
+    
     def get_mask_stats(self):
-        total_pixels = self.mask.size 
+        """Return statistics about the current mask."""
+        total_pixels = self.mask.size
         masked_pixels = cv2.countNonZero(self.mask)
         mask_percentage = (masked_pixels / total_pixels) * 100
-
+        
         return {
-                'total_pixels': total_pixels,
-                'masked_pixels': masked_pixels,
-                'mask_percentage': mask_percentage
+            'total_pixels': total_pixels,
+            'masked_pixels': masked_pixels,
+            'mask_percentage': mask_percentage
         }
-
-    # command to wrap all of our functions 
+    
     def run(self):
+        """
+        Main execution loop for the image masker.
+        Handles user interaction and key presses.
+        """
+        # Create window and set mouse callback
         cv2.namedWindow('Image Window')
-        #set the mouse callback
-        cv2.setMouseCallback('Image Window', self.sketcher.onmouse)
-
-        self.print_instructions()
-
+        cv2.setMouseCallback('Image Window', self.sketcher.mouse_callback)
+        
+        # Print instructions
+        self._print_instructions()
+        
+        # Main program loop
         while True:
+            # Display current image
             cv2.imshow('Image Window', self.display_image)
-
-            #wait for a key press! Other wise the window does NOTHING
-            key = cv2.waitKey(30) & 0xFF #why is it like this
-
+            
+            # Wait for key press
+            key = cv2.waitKey(30) & 0xFF
+            
             # Handle key presses
             if key == ord('r') or key == ord('R'):
                 self.process_mask_and_display()
@@ -146,6 +182,17 @@ class ImageMasker:
                 stats = self.get_mask_stats()
                 print(f"Mask info: {stats['masked_pixels']} pixels masked ({stats['mask_percentage']:.1f}%)")
             
+            elif key == ord('+') or key == ord('='):
+                self.change_brush_size(2)
+            
+            elif key == ord('-') or key == ord('_'):
+                self.change_brush_size(-2)
+            
+            elif key == ord('m') or key == ord('M'):
+                # Show mask as black and white image
+                cv2.namedWindow('Mask View')
+                cv2.imshow('Mask View', self.mask)
+            
             elif key == self.ESC_KEY or key == ord('q'):
                 break
         
@@ -163,6 +210,8 @@ class ImageMasker:
         print("- Press 'c' to clear mask")
         print("- Press 's' to save output image")
         print("- Press 'i' to show mask info")
+        print("- Press 'm' to view mask")
+        print("- Press '+'/'-' to increase/decrease brush size")
         print("- Press ESC or 'q' to quit")
         print("="*50 + "\n")
 
@@ -170,8 +219,8 @@ class ImageMasker:
 def main():
     """Main function to run the Image Masker application."""
     if len(sys.argv) != 2:
-        print("Usage: python image_masker.py <image_path>")
-        print("Example: python image_masker.py sample.jpg")
+        print("Usage: python masker.py <image_path>")
+        print("Example: python masker.py sample.jpg")
         return
     
     image_path = sys.argv[1]
@@ -191,5 +240,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
