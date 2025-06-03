@@ -6,29 +6,19 @@ import numpy as np
 import sys
 import os
 
-# Import our custom sketcher class
-from sketcher import sketcher
+# Import our custom Sketcher class
+from sketcher import Sketcher
 
 class ImageMasker:
-    """
-    A class to handle selective color masking on images.
-    Allows user to draw masks and display grayscale image with colored masked regions.
-    """
     
     def __init__(self, image_path):
-        """
-        Initialize the ImageMasker with an image file.
-        
-        Args:
-            image_path (str): Path to the source image file
-        """
         # Instance variables
         self.image_path = image_path
         self.Isrc = None          # Original color image
         self.mask = None          # Binary mask for drawing
         self.Ioutput = None       # Final output image
         self.display_image = None # Working copy for display
-        self.sketcher = None      # sketcher instance
+        self.sketcher = None      # Sketcher instance
         
         # Constants
         self.ESC_KEY = 27
@@ -40,7 +30,6 @@ class ImageMasker:
         self._setup_sketcher()
     
     def _load_image(self):
-        """Load the source image from file path."""
         self.Isrc = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
         
         if self.Isrc is None:
@@ -50,7 +39,6 @@ class ImageMasker:
         print(f"Image dimensions: {self.Isrc.shape}")
     
     def _initialize_mask(self):
-        """Initialize the binary mask and display image."""
         # Get image dimensions
         height, width = self.Isrc.shape[:2]
         
@@ -61,14 +49,10 @@ class ImageMasker:
         self.display_image = self.Isrc.copy()
     
     def _setup_sketcher(self):
-        """Initialize the sketcher class for interactive drawing."""
-        self.sketcher = sketcher('Image Window', self.display_image, self.mask)
+        # Pass references to our actual mask and display image
+        self.sketcher = Sketcher('Image Window', self.display_image, self.mask)
     
     def process_mask_and_display(self):
-        """
-        Process the current mask and display result with selective coloring.
-        Masked areas remain in color, unmasked areas become grayscale.
-        """
         # Convert source image to grayscale
         Igray = cv2.cvtColor(self.Isrc, cv2.COLOR_BGR2GRAY)
         
@@ -106,12 +90,6 @@ class ImageMasker:
         print("Mask cleared")
     
     def save_output(self, output_path):
-        """
-        Save the current output image to file.
-        
-        Args:
-            output_path (str): Path where to save the output image
-        """
         if self.Ioutput is not None:
             cv2.imwrite(output_path, self.Ioutput)
             print(f"Output saved to: {output_path}")
@@ -119,19 +97,12 @@ class ImageMasker:
             print("No output image to save. Press 'r' first to process the mask.")
     
     def change_brush_size(self, delta):
-        """
-        Change the brush size by the given delta.
-        
-        Args:
-            delta (int): Amount to change brush size (+/-)
-        """
         current_size = self.sketcher.get_brush_size()
         new_size = current_size + delta
         self.sketcher.set_brush_size(new_size)
         print(f"Brush size: {self.sketcher.get_brush_size()}")
     
     def get_mask_stats(self):
-        """Return statistics about the current mask."""
         total_pixels = self.mask.size
         masked_pixels = cv2.countNonZero(self.mask)
         mask_percentage = (masked_pixels / total_pixels) * 100
@@ -143,10 +114,6 @@ class ImageMasker:
         }
     
     def run(self):
-        """
-        Main execution loop for the image masker.
-        Handles user interaction and key presses.
-        """
         # Create window and set mouse callback
         cv2.namedWindow('Image Window')
         cv2.setMouseCallback('Image Window', self.sketcher.mouse_callback)
@@ -164,9 +131,16 @@ class ImageMasker:
             
             # Handle key presses
             if key == ord('r') or key == ord('R'):
-                self.process_mask_and_display()
-                stats = self.get_mask_stats()
-                print(f"Processed mask: {stats['mask_percentage']:.1f}% of image masked")
+                # Debug: Check if mask has any white pixels
+                masked_pixels = cv2.countNonZero(self.mask)
+                print(f"Debug: Mask has {masked_pixels} white pixels before processing")
+                
+                if masked_pixels > 0:
+                    self.process_mask_and_display()
+                    stats = self.get_mask_stats()
+                    print(f"Processed mask: {stats['mask_percentage']:.1f}% of image masked")
+                else:
+                    print("No mask drawn yet. Draw on the image first, then press 'r'.")
             
             elif key == ord('c') or key == ord('C'):
                 self.clear_mask()
@@ -190,6 +164,8 @@ class ImageMasker:
             
             elif key == ord('m') or key == ord('M'):
                 # Show mask as black and white image
+                masked_pixels = cv2.countNonZero(self.mask)
+                print(f"Debug: Mask has {masked_pixels} white pixels")
                 cv2.namedWindow('Mask View')
                 cv2.imshow('Mask View', self.mask)
             
