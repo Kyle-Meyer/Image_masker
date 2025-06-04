@@ -123,8 +123,8 @@ class ImageMasker:
         
         # Main program loop
         while True:
-            # Display current image
-            cv2.imshow('Image Window', self.display_image)
+            # Display the sketcher's image because its handling color corrections
+            cv2.imshow('Image Window', self.sketcher.display_image)
             
             # Wait for key press
             key = cv2.waitKey(30) & 0xFF
