@@ -20,12 +20,18 @@ class Sketcher:
         self.drawing = False
         self.last_point = None
         
+        # Mouse cursor state
+        self.current_mouse_pos = None
+        self.show_cursor = True
+        
         # Colors
         self.mask_color = 255  # White for mask
         self.display_color = (0, 255, 0)  # Green for visual feedback
+        self.cursor_color = (255, 255, 255)  # White for cursor circle
     
     def mouse_callback(self, event, x, y, flags, param):
         current_point = (x, y)
+        self.current_mouse_pos = current_point  # Always update mouse position
         
         if event == cv2.EVENT_LBUTTONDOWN:
             # Start drawing
@@ -33,16 +39,32 @@ class Sketcher:
             self.last_point = current_point
             self.draw_at_point(x, y)
         
-        elif event == cv2.EVENT_MOUSEMOVE and self.drawing:
-            # Continue drawing - draw line from last point to current point
-            if self.last_point is not None:
-                self.draw_line(self.last_point, current_point)
-            self.last_point = current_point
+        elif event == cv2.EVENT_MOUSEMOVE:
+            if self.drawing:
+                # Continue drawing - draw line from last point to current point
+                if self.last_point is not None:
+                    self.draw_line(self.last_point, current_point)
+                self.last_point = current_point
+            else:
+                # Just update the cursor position when not drawing
+                self.update_display_with_cursor()
         
         elif event == cv2.EVENT_LBUTTONUP:
             # Stop drawing
             self.drawing = False
             self.last_point = None
+            # Update display to show cursor
+            self.update_display_with_cursor()
+        
+        elif event == cv2.EVENT_MOUSELEAVE:
+            # Hide cursor when mouse leaves window
+            self.show_cursor = False
+            self.update_display()
+        
+        elif event == cv2.EVENT_MOUSEENTER:
+            # Show cursor when mouse enters window
+            self.show_cursor = True
+            self.update_display_with_cursor()
     
     def draw_at_point(self, x, y):
         # Debug print
@@ -51,8 +73,8 @@ class Sketcher:
         # Draw filled circle on mask
         cv2.circle(self.mask, (x, y), self.brush_size, self.mask_color, -1)
         
-        # Update display to show inverted colors where mask is white
-        self.update_display()
+        # Update display to show inverted colors where mask is white, plus cursor
+        self.update_display_with_cursor()
         
         masked_pixels = cv2.countNonZero(self.mask)
         print(f"Debug: Mask now has {masked_pixels} white pixels")
@@ -75,8 +97,8 @@ class Sketcher:
             # Draw filled circle on mask
             cv2.circle(self.mask, (x, y), self.brush_size, self.mask_color, -1)
         
-        # Update display once after drawing the entire line
-        self.update_display()
+        # Update display once after drawing the entire line, with cursor
+        self.update_display_with_cursor()
 
     def update_display(self):
         # Reset display to original
@@ -86,8 +108,25 @@ class Sketcher:
         mask_bool = self.mask == 255
         self.display_image[mask_bool] = 255 - self.display_image[mask_bool]
 
+    def update_display_with_cursor(self):
+        # First update the base display
+        self.update_display()
+        
+        # Draw cursor circle if mouse position is known and cursor should be shown
+        if self.show_cursor and self.current_mouse_pos is not None:
+            # Draw cursor circle outline
+            cv2.circle(self.display_image, self.current_mouse_pos, self.brush_size, 
+                      self.cursor_color, 1)
+            
+            # Optional: Draw a small center dot
+            cv2.circle(self.display_image, self.current_mouse_pos, 1, 
+                      self.cursor_color, -1)
+
     def set_brush_size(self, size):
         self.brush_size = max(1, min(50, size))
+        # Update display to show new cursor size
+        if self.current_mouse_pos is not None:
+            self.update_display_with_cursor()
     
     def get_brush_size(self):
         return self.brush_size
@@ -96,8 +135,8 @@ class Sketcher:
         self.mask.fill(0)
         self.drawing = False
         self.last_point = None
-        # Update display after clearing
-        self.update_display()
+        # Update display after clearing, with cursor
+        self.update_display_with_cursor()
     
     def set_mask_color(self, color):
         self.mask_color = color
@@ -105,11 +144,15 @@ class Sketcher:
     def set_display_color(self, color):
         self.display_color = color
     
+    def set_cursor_color(self, color):
+        """Set the color of the brush cursor circle."""
+        self.cursor_color = color
+    
     def update_images(self, display_image, mask):
         self.display_image = display_image
         self.original_image = display_image.copy()  
         self.mask = mask
         self.drawing = False
         self.last_point = None
-        # Update display with new images
-        self.update_display()
+        # Update display with new images, with cursor
+        self.update_display_with_cursor()
