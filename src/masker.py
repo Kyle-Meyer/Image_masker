@@ -123,6 +123,9 @@ class ImageMasker:
         
         # Main program loop
         while True:
+            # Animate marching ants
+            self.sketcher.animate_ants()
+            self.sketcher.update_display()
             # Display the sketcher's image because its handling color corrections
             cv2.imshow('Image Window', self.sketcher.display_image)
             
@@ -216,3 +219,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
